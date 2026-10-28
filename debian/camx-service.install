@@ -1,0 +1,6 @@
+usr/bin/qti-cam-server
+usr/libexec/qmmf-server/check-camx-overlay.sh
+usr/libexec/qmmf-server/wait-camx-overlay.sh
+etc/qti-cam-server.ini
+etc/qti-cam-server-env
+usr/lib/systemd/system/qti-cam-server.service

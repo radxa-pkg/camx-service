@@ -1,0 +1,24 @@
+override_dh_dwz:
+
+override_dh_auto_configure:
+
+override_dh_auto_build:
+
+override_dh_auto_install:
+
+PROTOBUF_PREFIX ?= /usr
+PROTOBUF_LIBDIR ?= $(PROTOBUF_PREFIX)/lib/$(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+PROTOC ?= /usr/bin/protoc
+
+override_dh_install:
+	$(MAKE) PROTOBUF_PREFIX="$(PROTOBUF_PREFIX)" PROTOBUF_LIBDIR="$(PROTOBUF_LIBDIR)" PROTOC="$(PROTOC)" build-camx-service
+	dh_install --sourcedir=debian/tmp
+
+override_dh_missing:
+	dh_missing --fail-missing
+
+override_dh_shlibdeps:
+	dh_shlibdeps -- -l$(PROTOBUF_LIBDIR) --ignore-missing-info
+
+override_dh_installsystemd:
+	dh_installsystemd --package=camx-service --no-start --no-stop-on-upgrade --no-restart-after-upgrade qti-cam-server.service

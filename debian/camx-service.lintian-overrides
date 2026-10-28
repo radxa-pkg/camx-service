@@ -1,0 +1,4 @@
+# The upstream executable does not ship a man page.
+no-manual-page
+
+arch-independent-package-contains-binary-or-object

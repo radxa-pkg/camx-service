@@ -1,0 +1,91 @@
+Description: qmmf-server: wait for the CamX overlay before starting
+ qti-cam-server.service gates startup on ExecCondition
+ /usr/libexec/qmmf-server/check-camx-overlay.sh, which succeeds only when some
+ /dev/video* node exists whose driver module name contains "camera". On QCS6490
+ the camera_qcm6490 module is loaded asynchronously by udev from the device
+ tree, so on a cold boot the condition can be evaluated before those nodes
+ exist: measured on the Q6A (Ubuntu 26.04, kernel 7.0.11-7-qcom),
+ systemd-modules-load finished at t=1s while camera_qcm6490 bound at t=6s, and
+ the unit was evaluated at t=1s and skipped. A skipped unit is never retried,
+ so qti-cam-server stayed down until it was started by hand. Evaluate the
+ condition through a wrapper that polls for up to 60s, and order the unit after
+ systemd-modules-load.service as the upstream unit intends.
+Author: Radxa
+Forwarded: not-needed
+Last-Update: 2026-10-13
+
+diff --git a/src/qmmf-server/CMakeLists.txt b/src/qmmf-server/CMakeLists.txt
+index ccbc1af..ce8959f 100644
+--- a/src/qmmf-server/CMakeLists.txt
++++ b/src/qmmf-server/CMakeLists.txt
+@@ -42,6 +42,7 @@ install(FILES
+ 
+ install(PROGRAMS
+         ${CMAKE_CURRENT_SOURCE_DIR}/check-camx-overlay.sh
++        ${CMAKE_CURRENT_SOURCE_DIR}/wait-camx-overlay.sh
+         DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/qmmf-server)
+ 
+ if(HAVE_ANDROID_UTILS)
+diff --git a/src/qmmf-server/service/qti-cam-server-base.service.in b/src/qmmf-server/service/qti-cam-server-base.service.in
+index 5ecd8eb..5d47026 100644
+--- a/src/qmmf-server/service/qti-cam-server-base.service.in
++++ b/src/qmmf-server/service/qti-cam-server-base.service.in
+@@ -33,7 +33,10 @@
+ Description= Camera Server Service
+ Documentation=https://github.com/qualcomm/camera-service
+ SourcePath=/usr/bin/qti-cam-server
+-After=var-volatile-lib.service
++# camera_qcm6490 is loaded asynchronously by udev from the device tree, so the
++# ExecCondition below races with the camera driver probe on a cold boot.
++After=var-volatile-lib.service systemd-modules-load.service
++Wants=systemd-modules-load.service
+ 
+ [Service]
+ User=@CAM_SERVER_USER@
+@@ -44,7 +47,7 @@ RuntimeDirectory=cam_server
+ RuntimeDirectoryMode=0775
+ RuntimeDirectoryPreserve=yes
+ CacheDirectory=camera
+-ExecCondition=/usr/libexec/qmmf-server/check-camx-overlay.sh
++ExecCondition=/usr/libexec/qmmf-server/wait-camx-overlay.sh 60
+ ExecStart=/usr/bin/qti-cam-server
+ 
+ [Install]
+diff --git a/src/qmmf-server/wait-camx-overlay.sh b/src/qmmf-server/wait-camx-overlay.sh
+new file mode 100755
+index 0000000..9d2833d
+--- /dev/null
++++ b/src/qmmf-server/wait-camx-overlay.sh
+@@ -0,0 +1,32 @@
++#!/bin/sh
++
++# wait-camx-overlay.sh
++
++# Description:
++#   Wrapper around check-camx-overlay.sh, used as the ExecCondition of
++#   qti-cam-server.service. The camera driver module (camera_qcm6490) is loaded
++#   asynchronously by udev from the device tree, so on a cold boot the plain
++#   check can be evaluated before the /dev/video* nodes exist. A failing
++#   ExecCondition makes systemd skip the unit, and a skipped unit is never
++#   retried, which left qti-cam-server down until it was started by hand.
++
++# Behavior:
++#   - Polls check-camx-overlay.sh once per second.
++#   - Exits 0 as soon as it succeeds, so the unit starts.
++#   - Exits 1 after the timeout, so a system without a camera overlay is still
++#     skipped as intended.
++
++# Usage:
++#   wait-camx-overlay.sh [timeout-seconds]     # default 60
++
++timeout="${1:-60}"
++check=/usr/libexec/qmmf-server/check-camx-overlay.sh
++
++i=0
++while [ "$i" -lt "$timeout" ]; do
++    "$check" && exit 0
++    sleep 1
++    i=$((i + 1))
++done
++
++exit 1

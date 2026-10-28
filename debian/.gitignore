@@ -7,4 +7,5 @@
 /*.*.debhelper
 /*.substvars
 /tmp
+/camx-service*/
 

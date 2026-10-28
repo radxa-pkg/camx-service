@@ -1,6 +1,5 @@
-camx-service (0.1.0-1) UNRELEASED; urgency=medium
+camx-service (1.0.5-1) UNRELEASED; urgency=medium
 
-  * Add initial Debian packaging support
+  * Package upstream camera-service 1.0.5.
 
  -- "Radxa Computer Co., Ltd" <dev@radxa.com>  Thu, 01 Jan 1970 08:00:00 +0800
-

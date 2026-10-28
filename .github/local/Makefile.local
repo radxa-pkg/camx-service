@@ -1,0 +1,41 @@
+CUSTOM_DEBUILD_ARG += -aarm64
+CAMX_C_COMPILER := aarch64-linux-gnu-gcc
+CAMX_CXX_COMPILER := aarch64-linux-gnu-g++
+CAMX_STRIP := aarch64-linux-gnu-strip
+CAMX_CMAKE_CROSS := -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+	-DCMAKE_C_COMPILER=$(CAMX_C_COMPILER) -DCMAKE_CXX_COMPILER=$(CAMX_CXX_COMPILER)
+
+# Use the protobuf development files and protoc provided by the SDK.
+PROTOBUF_PREFIX ?= /usr
+PROTOBUF_LIBDIR ?= $(PROTOBUF_PREFIX)/lib/$(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+PROTOC ?= /usr/bin/protoc
+
+CAMX_PROTOBUF_ARGS ?= -DProtobuf_INCLUDE_DIR="$(PROTOBUF_PREFIX)/include" \
+	-DProtobuf_LIBRARY="$(PROTOBUF_LIBDIR)/libprotobuf.so"
+
+.PHONY: build-camx-service
+build-camx-service:
+	rm -rf build-all debian/tmp
+	$(if $(PROTOC),$(PROTOC),protoc) --proto_path=src/common/proto \
+		--cpp_out=src/common/proto src/common/proto/qmmf.proto
+	# Leave TARGET_BOARD_PLATFORM unset to build both generic and required _kodiak libraries.
+	# Use the video group for the socket; keep assertions enabled to avoid runtime failures with -DNDEBUG.
+	cmake -S src $(CAMX_CMAKE_CROSS) -B build-all -DBUILD_CATEGORY=ALL \
+		-DCAM_SERVER_USER=root -DCAM_SERVER_GROUP=video \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O2 -g" \
+		-DCMAKE_C_FLAGS_RELWITHDEBINFO="-O2 -g" \
+		-DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib \
+		-DCMAKE_INSTALL_SYSCONFDIR=/etc -DCMAKE_INSTALL_LIBEXECDIR=/usr/libexec \
+		-DCMAKE_PREFIX_PATH="$(PROTOBUF_PREFIX)" \
+		-DProtobuf_PROTOC_EXECUTABLE="$(PROTOC)" \
+		$(CAMX_PROTOBUF_ARGS) \
+		-DCMAKE_EXE_LINKER_FLAGS="-L$(PROTOBUF_LIBDIR) -Wl,--as-needed -Wl,-rpath-link,$(PROTOBUF_LIBDIR)" \
+		-DCMAKE_SHARED_LINKER_FLAGS="-L$(PROTOBUF_LIBDIR) -Wl,--as-needed -Wl,-rpath-link,$(PROTOBUF_LIBDIR)" \
+		-DCMAKE_CXX_FLAGS="-I$(PROTOBUF_PREFIX)/include"
+	cmake --build build-all --parallel
+	DESTDIR=$(CURDIR)/debian/tmp cmake --install build-all --config Release
+	arch=$$(dpkg-architecture -qDEB_HOST_MULTIARCH); \
+		mkdir -p "debian/tmp/usr/lib/$$arch/pkgconfig"; \
+		mv debian/tmp/usr/lib/pkgconfig/qmmf_*.pc "debian/tmp/usr/lib/$$arch/pkgconfig/"
+	rmdir debian/tmp/usr/lib/pkgconfig

@@ -1,20 +1,84 @@
 Source: camx-service
-Maintainer: "Radxa Computer Co., Ltd" <dev@radxa.com>
-Section: admin
-Priority: standard
-Standards-Version: 4.6.0
-Build-Depends: debhelper-compat (= 13),
-               debhelper (>=13~),
-               devscripts,
-               lintian,
-               dh-exec,
-               pandoc,
-
-Package: camx-service
-Architecture: all
 Section: admin
 Priority: optional
-Depends: ${misc:Depends},
-Description: camx-service
- This package provides the camx-service.
+Maintainer: "Radxa Computer Co., Ltd" <dev@radxa.com>
+Rules-Requires-Root: no
+# The binary packages are Architecture: all but ship arm64 ELF objects. In
+# compat 13 debhelper marks the "elf-tools" addon as arch-only and therefore
+# skips dh_strip/dh_makeshlibs/dh_shlibdeps for arch:all packages; requesting
+# the addon through Build-Depends activates it for both sequences.
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-sequence-elf-tools,
+ cmake,
+ pkg-config,
+ libglib2.0-dev,
+ camx-protobuf-kodiak-compiler,
+ camx-protobuf-kodiak-dev,
+ protobuf-c-compiler,
+ libprotobuf-c-dev,
+ libgtest-dev,
+ camxcommon-headers,
+ camxlib-kodiak,
+ camx-kodiak,
+ chicdk-kodiak
+Standards-Version: 4.6.0
+Homepage: https://github.com/qualcomm/camera-service
+
+Package: camx-service-common
+Section: admin
+Architecture: all
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ camx-protobuf-kodiak,
+ camx-abseil-kodiak
+Description: Qualcomm QMMF common libraries
+ Common libraries shared by the Qualcomm camera client and server,
+ including the utf8_range runtime used by the protobuf client.
+
+Package: camx-service-client
+Section: admin
+Architecture: all
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ camx-service-common (= ${binary:Version})
+Description: Qualcomm QMMF client library
+ Client library for applications using the Qualcomm camera service.
+
+Package: camx-service-server-lib
+Section: admin
+Architecture: all
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ camx-service-common (= ${binary:Version}),
+ camxlib-kodiak
+Description: Qualcomm QMMF server libraries
+ Server-side libraries for the Qualcomm camera service.
+
+Package: camx-service-dev
+Section: admin
+Architecture: all
+Depends:
+ ${misc:Depends},
+ camx-service-common (= ${binary:Version}),
+ camx-service-client (= ${binary:Version}),
+ camx-service-server-lib (= ${binary:Version})
+Description: Qualcomm QMMF development files
+ Headers and pkg-config metadata for developing against QMMF.
+
+Package: camx-service
+Section: admin
+Priority: optional
+Architecture: all
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ camx-service-common (= ${binary:Version}),
+ camx-service-client (= ${binary:Version}),
+ camx-service-server-lib (= ${binary:Version})
+Description: Qualcomm Linux camera server for QCS6490
+ Camera server executable, configuration, and systemd service.
 
